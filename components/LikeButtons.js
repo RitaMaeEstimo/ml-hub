@@ -7,7 +7,11 @@ export default function LikeButtons({ articleId }) {
   const [score, setScore] = useState(0);
 
   async function loadScore() {
-    const { data } = await supabase.from("article_likes").select("value").eq("article_id", articleId);
+    const { data } = await supabase
+      .from("article_likes")
+      .select("value")
+      .eq("article_id", articleId);
+
     const total = (data || []).reduce((sum, row) => sum + row.value, 0);
     setScore(total);
   }
@@ -35,15 +39,19 @@ export default function LikeButtons({ articleId }) {
       { onConflict: "article_id,user_id" }
     );
 
-    if (!error) loadScore();
-    else alert(error.message);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    loadScore();
   }
 
   return (
-    <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 24 }}>
-      <button onClick={() => vote(1)}>+</button>
-      <span>Score: {score}</span>
-      <button onClick={() => vote(-1)}>-</button>
+    <div className="button-row" style={{ marginTop: 24 }}>
+      <button className="btn-secondary" onClick={() => vote(1)}>Like +</button>
+      <button className="btn-secondary" onClick={() => vote(-1)}>Dislike -</button>
+      <span className="meta-row">Score: {score}</span>
     </div>
   );
 }

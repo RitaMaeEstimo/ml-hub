@@ -40,14 +40,15 @@ export default function CommentSection({ articleId }) {
       parent_id: parentId,
     });
 
-    if (!error) {
-      setContent("");
-      setReplyText("");
-      setReplyTo(null);
-      loadComments();
-    } else {
+    if (error) {
       alert(error.message);
+      return;
     }
+
+    setContent("");
+    setReplyText("");
+    setReplyTo(null);
+    loadComments();
   }
 
   const topLevel = comments.filter((c) => !c.parent_id);
@@ -55,36 +56,44 @@ export default function CommentSection({ articleId }) {
 
   return (
     <section style={{ marginTop: 40 }}>
-      <h2>Comments</h2>
+      <h2 className="section-title">Comments</h2>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+      <div className="button-row" style={{ marginBottom: 20 }}>
         <input
+          className="input"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="Write a comment"
           style={{ flex: 1 }}
         />
-        <button onClick={() => addComment()}>Post</button>
+        <button className="btn" onClick={() => addComment()}>Post</button>
       </div>
 
+      {topLevel.length === 0 ? (
+        <div className="empty-state">No comments yet. Be the first to reply.</div>
+      ) : null}
+
       {topLevel.map((comment) => (
-        <div key={comment.id} style={{ borderTop: "1px solid #ddd", padding: "12px 0" }}>
+        <div key={comment.id} className="comment-box">
           <p>{comment.content}</p>
-          <button onClick={() => setReplyTo(comment.id)}>Reply</button>
+          <div className="button-row" style={{ marginTop: 10 }}>
+            <button className="btn-ghost" onClick={() => setReplyTo(comment.id)}>Reply</button>
+          </div>
 
           {replyTo === comment.id && (
-            <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+            <div className="button-row" style={{ marginTop: 10 }}>
               <input
+                className="input"
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
                 placeholder="Write a reply"
                 style={{ flex: 1 }}
               />
-              <button onClick={() => addComment(comment.id, replyText)}>Send</button>
+              <button className="btn-secondary" onClick={() => addComment(comment.id, replyText)}>Send</button>
             </div>
           )}
 
-          <div style={{ marginLeft: 24, marginTop: 10 }}>
+          <div className="comment-replies">
             {replies(comment.id).map((reply) => (
               <div key={reply.id} style={{ padding: "8px 0" }}>
                 <p>{reply.content}</p>
