@@ -1,56 +1,81 @@
-import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
-export default async function ArticlesPage() {
-  const { data: articles } = await supabase
-    .from("articles")
-    .select("*")
-    .order("created_at", { ascending: false });
+export async function POST(req) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const providedKey = body?.key;
 
-  return (
-    <div className="page-shell">
-      <header className="topbar">
-        <div className="container topbar-inner">
-          <Link href="/" className="brand">
-            ML <span>HUB</span>
-          </Link>
-          <div className="button-row">
-            <Link href="/dashboard" className="btn-ghost">Dashboard</Link>
-            <Link href="/top-liked" className="btn-ghost">Top Liked</Link>
-          </div>
-        </div>
-      </header>
+    if (!providedKey || providedKey !== process.env.ADMIN_BOOTSTRAP_KEY) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-      <main className="container" style={{ padding: "36px 0 48px" }}>
-        <div className="panel">
-          <h1 className="page-title">Articles</h1>
-          <p className="page-subtitle">
-            Explore machine learning articles published by the community.
-          </p>
+    const email = process.env.ADMIN_BOOTSTRAP_EMAIL;
+    const password = process.env.ADMIN_BOOTSTRAP_PASSWORD;
 
-          {(articles || []).length === 0 ? (
-            <div className="empty-state">No articles yet. Publish the first one from the dashboard.</div>
-          ) : (
-            <div className="grid-cards">
-              {articles.map((article) => (
-                <article key={article.id} className="article-card">
-                  <h2 className="section-title" style={{ marginBottom: 8 }}>{article.title}</h2>
-                  <div className="meta-row">
-                    {article.category ? <span>{article.category}</span> : null}
-                    <span>{new Date(article.created_at).toLocaleDateString()}</span>
-                  </div>
-                  <p style={{ marginTop: 12, color: "var(--text-secondary)" }}>
-                    {article.source_description || article.content?.slice(0, 140) || "No preview available."}
-                  </p>
-                  <div className="button-row" style={{ marginTop: 16 }}>
-                    <Link href={`/articles/${article.slug}`} className="btn-secondary">Read Article</Link>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </div>
-      </main>
-    </div>
-  );
+    if (!email || !password) {
+      return NextResponse.json(
+        { error: "Missing admin bootstrap env values" },
+        { status: 500 }
+      );
+    }
+
+    const listResult = await supabaseAdmin.auth.admin.listUsers();
+    if (listResult.error) {
+      return NextResponse.json(
+        { error: listResult.error.message },
+        { status: 500 }
+      );
+    }
+
+    let existingUser = listResult.data.users.find((u) => u.email === email);
+
+    if (!existingUser) {
+      const createResult = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
+
+      if (createResult.error) {
+        return NextResponse.json(
+          { error: createResult.error.message },
+          { status: 500 }
+        );
+      }
+
+      existingUser = createResult.data.user;
+    }
+
+    const userId = existingUser.id;
+
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .upsert(
+        {
+          id: userId,
+          email,
+          role: "admin",
+        },
+        { onConflict: "id" }
+      );
+
+    if (profileError) {
+      return NextResponse.json(
+        { error: profileError.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      email,
+      message: "Admin account is ready.",
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error.message || "Unexpected server error" },
+      { status: 500 }
+    );
+  }
 }

@@ -1,56 +1,80 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 export default function LikeButtons({ articleId }) {
-  const [score, setScore] = useState(0);
+  const [votes, setVotes] = useState([]);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
-  async function loadScore() {
+  async function loadVotes() {
+    const { data: authData } = await supabase.auth.getUser();
+    setCurrentUserId(authData?.user?.id || null);
+
     const { data } = await supabase
-      .from("article_likes")
-      .select("value")
+      .from("article_reactions")
+      .select("*")
       .eq("article_id", articleId);
 
-    const total = (data || []).reduce((sum, row) => sum + row.value, 0);
-    setScore(total);
+    setVotes(data || []);
   }
 
   useEffect(() => {
-    loadScore();
+    if (articleId) loadVotes();
   }, [articleId]);
 
+  const score = useMemo(
+    () => votes.reduce((sum, row) => sum + row.value, 0),
+    [votes]
+  );
+
+  const myVote = useMemo(
+    () => votes.find((row) => row.user_id === currentUserId)?.value ?? 0,
+    [votes, currentUserId]
+  );
+
   async function vote(value) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: authData } = await supabase.auth.getUser();
+    const user = authData?.user;
 
     if (!user) {
       alert("Please sign in first.");
       return;
     }
 
-    const { error } = await supabase.from("article_likes").upsert(
-      {
+    const existing = votes.find((v) => v.user_id === user.id);
+
+    if (existing?.value === value) {
+      await supabase
+        .from("article_reactions")
+        .delete()
+        .eq("article_id", articleId)
+        .eq("user_id", user.id);
+    } else if (existing) {
+      await supabase
+        .from("article_reactions")
+        .update({ value })
+        .eq("article_id", articleId)
+        .eq("user_id", user.id);
+    } else {
+      await supabase.from("article_reactions").insert({
         article_id: articleId,
         user_id: user.id,
         value,
-      },
-      { onConflict: "article_id,user_id" }
-    );
-
-    if (error) {
-      alert(error.message);
-      return;
+      });
     }
 
-    loadScore();
+    loadVotes();
   }
 
   return (
     <div className="button-row" style={{ marginTop: 24 }}>
-      <button className="btn-secondary" onClick={() => vote(1)}>Like +</button>
-      <button className="btn-secondary" onClick={() => vote(-1)}>Dislike -</button>
+      <button className="btn-secondary" onClick={() => vote(1)}>
+        {myVote === 1 ? "Retract Like" : "Like"}
+      </button>
+      <button className="btn-secondary" onClick={() => vote(-1)}>
+        {myVote === -1 ? "Retract Dislike" : "Dislike"}
+      </button>
       <span className="meta-row">Score: {score}</span>
     </div>
   );
